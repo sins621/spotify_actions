@@ -1,6 +1,7 @@
 import base64
 import os
 from urllib.parse import urlencode
+import json
 
 import spotipy
 from dotenv import load_dotenv
@@ -22,6 +23,18 @@ REDIRECT_URI = os.getenv(
 )
 STATE = os.getenv("SPOTIFY_STATE", "some-state-value")
 sp = None
+refresh_token = None
+
+
+def refresh_spotify():
+    refresh_url = "https://accounts.spotify.com/api/token"
+    headers = {
+        "Authorization": "Basic "
+        + base64.b64encode(f"{SPOTIFY_ID}:{SPOTIFY_SECRET}".encode()).decode(),
+        "Content-Type": "application/x-www-form-urlencoded",
+    }
+    data = {"grant_type": "refresh_token", "refresh_token": refresh_token}
+    response = post(refresh_url, headers=headers, data=data)
 
 
 def authenticate_spotify(code, state):
@@ -47,6 +60,8 @@ def authenticate_spotify(code, state):
 
     if "access_token" in token_response:
         access_token = token_response["access_token"]
+        global refresh_token
+        refresh_token = token_response["refresh_token"]
         return spotipy.Spotify(auth=access_token), None
     else:
         return None, f"Token retrieval failed: {token_response}"
@@ -109,6 +124,9 @@ def now_playing():
             )
 
     except spotipy.SpotifyException as e:
+        if e.code == 401:
+            refresh_spotify()
+            now_playing()
         return (
             jsonify({"error": f"Error retrieving playback info: {e}"}),
             500,
@@ -123,6 +141,9 @@ def skip_song():
         sp.next_track()
         return jsonify({"message": "Skipped Song"})
     except spotipy.SpotifyException as e:
+        if e.code == 401:
+            refresh_spotify()
+            skip_song()
         return jsonify({"error": f"Error skipping track: {e}"}), 500
 
 
@@ -136,7 +157,8 @@ def search():
         return jsonify({"error": "Search query is required."}), 400
 
     try:
-        response = sp.search(q=query, limit=1)
+        response = sp.search(q=query, limit=1, market="ZA")
+        print(json.dumps(response, indent=2))
         items = response.get("tracks", {}).get("items", [])  # pyright: ignore
         if items:
             song_data = items[0]
@@ -152,6 +174,9 @@ def search():
         else:
             return jsonify({"message": "No results found."}), 404
     except spotipy.SpotifyException as e:
+        if e.code == 401:
+            refresh_spotify()
+            search()
         return jsonify({"error": f"Error searching for track: {e}"}), 500
 
 
@@ -174,6 +199,9 @@ def add_to_queue(uri):
             sp.add_to_queue(uri)
             return jsonify({"message": "Successfully added to queue"})
         except spotipy.SpotifyException as e:
+            if e.code == 401:
+                refresh_spotify()
+                add_to_queue(uri)
             return (
                 jsonify({"error": f"Error adding to queue: {e}"}),
                 500,
