@@ -34,5 +34,3 @@ jobs:
               --env SPOTIFY_ID=${{ secrets.SPOTIFY_ID }} \
               --env SPOTIFY_SECRET=${{ secrets.SPOTIFY_SECRET }} \
               flask_app_image
-          EOF
-
