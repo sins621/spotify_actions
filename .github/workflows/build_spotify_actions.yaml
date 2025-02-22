@@ -3,7 +3,7 @@ name: Deploy Spotify Actions
 on:
   push:
     branches:
-      - master
+      - main
 
 jobs:
   deploy:
