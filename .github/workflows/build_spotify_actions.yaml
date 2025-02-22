@@ -13,16 +13,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up SSH
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" | tr -d '\r' > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H 41.164.76.235 >> ~/.ssh/known_hosts
-
-      - name: Deploy via SSH
-        run: |
-          ssh sins@41.164.76.235 << 'EOF'
+      - name: executing remote ssh commands using password
+        uses: appleboy/ssh-action@v1.2.1
+        with:
+          host: ${{ secrets.HOST }}
+          username: linuxserver.io
+          password: ${{ secrets.PASSWORD }}
+          port: ${{ secrets.PORT }}
+          script:
             cd spotify/actions
 
             git pull origin master
@@ -31,8 +29,6 @@ jobs:
             docker rm flask_app || true
 
             docker build -t flask_app_image .
-
-            # Run the container on port 8080
             docker run -d --name flask_app \
               -p 8080:8080 \
               --env SPOTIFY_ID=${{ secrets.SPOTIFY_ID }} \
