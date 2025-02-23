@@ -20,20 +20,14 @@ jobs:
         run: |
           docker login -u sins621 -p ${{ secrets.DOCKER_HUB_TOKEN }}
           docker push sins621/test:latest
-          docker run -p 8080:8080 -e SPOTIFY_ID=${{ secrets.SPOTIFY_ID }} -e SPOTIFY_SECRET=${{ secrets.SPOTIFY_SECRET }} sins621/test:latest
 
-      # - NAME: pull and run image on remote
-      #   uses: appleboy/ssh-action@v1.2.1
-      #   with:
-      #     host: ${{ secrets.HOST }}
-      #     username: sins
-      #     password: ${{ secrets.PASSWORD }}
-      #     port: ${{ secrets.PORT }}
-      #     script:
-      #       cd spotify_actions
-      #
-      #       git pull origin main
-      #
-      #       docker stop flask_app_image || true
-      #       docker rm flask_app_image || true
-      #
+      - name: pull and run image on remote
+        uses: appleboy/ssh-action@v1.2.1
+        with:
+          host: ${{ secrets.HOST }}
+          username: sins
+          password: ${{ secrets.PASSWORD }}
+          port: ${{ secrets.PORT }}
+          script:
+            cd spotify_actions
+            docker run -p 8080:8080 -e SPOTIFY_ID=${{ secrets.SPOTIFY_ID }} -e SPOTIFY_SECRET=${{ secrets.SPOTIFY_SECRET }} sins621/test:latest
