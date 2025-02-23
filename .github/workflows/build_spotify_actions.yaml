@@ -29,8 +29,6 @@ jobs:
             docker rm flask_app || true
 
             docker build -t flask_app_image .
-            docker run -d --name flask_app \
-              -p 8080:8080 \
-              --env SPOTIFY_ID=${{ secrets.SPOTIFY_ID }} \
-              --env SPOTIFY_SECRET=${{ secrets.SPOTIFY_SECRET }} \
-              flask_app_image
+            docker run -p 8080:8080 flask_app_image \
+              --e SPOTIFY_ID=${{ secrets.SPOTIFY_ID }} \
+              --e SPOTIFY_SECRET=${{ secrets.SPOTIFY_SECRET }} \
