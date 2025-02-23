@@ -30,4 +30,7 @@ jobs:
           port: ${{ secrets.PORT }}
           script: |
             cd spotify_actions
-            docker run -p 8080:8080 -e SPOTIFY_ID=${{ secrets.SPOTIFY_ID }} -e SPOTIFY_SECRET=${{ secrets.SPOTIFY_SECRET }} sins621/test:latest
+            docker run -d -p 8080:8080 \
+              -e SPOTIFY_ID=${{ secrets.SPOTIFY_ID }} \
+              -e SPOTIFY_SECRET=${{ secrets.SPOTIFY_SECRET }} \
+              sins621/test:latest
