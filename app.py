@@ -5,12 +5,13 @@ import json
 
 import spotipy
 from dotenv import load_dotenv
-from flask import Flask, jsonify, redirect, request
+from flask import Flask, jsonify, redirect, request, Blueprint
 from requests import post
 
 load_dotenv()
 
 app = Flask(__name__)
+spotify_bp = Blueprint("spotify", __name__, url_prefix="/api/spotify")
 
 SPOTIFY_SECRET = os.getenv("SPOTIFY_SECRET")
 SPOTIFY_ID = os.getenv("SPOTIFY_ID")
@@ -18,7 +19,7 @@ SCOPES = (
     "user-modify-playback-state user-read-currently-playing user-read-playback-state"
 )
 REDIRECT_URI = os.getenv(
-    "SPOTIFY_REDIRECT_URI", "http://localhost:3000/api/spotify/auth_redirect"
+    "SPOTIFY_REDIRECT_URI", "http://localhost:8000/api/spotify/auth_redirect"
 )
 STATE = os.getenv("SPOTIFY_STATE", "some-state-value")
 sp = None
@@ -66,12 +67,12 @@ def authenticate_spotify(code, state):
         return None, f"Token retrieval failed: {token_response}"
 
 
-@app.route("/")
+@spotify_bp.route("/")
 def home():
     return "Hello"
 
 
-@app.route("/authenticate")
+@spotify_bp.route("/authenticate")
 def authenticate():
     auth_url = "https://accounts.spotify.com/authorize?" + urlencode(
         {
@@ -85,7 +86,7 @@ def authenticate():
     return redirect(auth_url, 302)
 
 
-@app.route("/auth_redirect")
+@spotify_bp.route("/auth_redirect")
 def auth_redirect():
     code = request.args.get("code")
     state = request.args.get("state")
@@ -99,7 +100,7 @@ def auth_redirect():
         return jsonify({"error": error_message}), 400
 
 
-@app.route("/now_playing")
+@spotify_bp.route("/now_playing")
 def now_playing():
     if not sp:
         return jsonify({"error": "Please Authenticate Spotify"}), 400
@@ -134,7 +135,7 @@ def now_playing():
         )
 
 
-@app.route("/skip_song")
+@spotify_bp.route("/skip_song")
 def skip_song():
     if not sp:
         return jsonify({"error": "Please Authenticate Spotify"}), 400
@@ -146,7 +147,7 @@ def skip_song():
         return jsonify({"error": f"Error skipping track: {e}"}), 500
 
 
-@app.route("/search")
+@spotify_bp.route("/search")
 def search():
     if not sp:
         return jsonify({"error": "Please Authenticate Spotify"}), 400
@@ -176,7 +177,7 @@ def search():
         return jsonify({"error": f"Error searching for track: {e}"}), 500
 
 
-@app.route("/add", methods=["POST"])
+@spotify_bp.route("/add", methods=["POST"])
 def add_to_queue_route():
     if not sp:
         return jsonify({"error": "Please Authenticate Spotify"}), 400
@@ -201,3 +202,5 @@ def add_to_queue(uri):
             )
     else:
         return jsonify({"error": "Please Authenticate Spotify"}), 400
+
+app.register_blueprint(spotify_bp)
