@@ -10,25 +10,32 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Docker Build and Publish
+      - name: checkout
         uses: actions/checkout@v4
 
-      - name: Pull and Run Image on Remote
-        uses: appleboy/ssh-action@v1.2.1
-        with:
-          host: ${{ secrets.HOST }}
-          username: sins
-          password: ${{ secrets.PASSWORD }}
-          port: ${{ secrets.PORT }}
-          script:
-            cd spotify_actions
+      - name: build image
+        run: docker build . -t sins621/test:latest
 
-            git pull origin main
+      - name: push image to docker hub
+        run: |
+          docker push sins621/test:latest
 
-            docker stop flask_app_image || true
-            docker rm flask_app_image || true
-
-            docker build -t flask_app_image .
-            docker run -p 8080:8080 flask_app_image \
-              --e SPOTIFY_ID=${{ secrets.SPOTIFY_ID }} \
-              --e SPOTIFY_SECRET=${{ secrets.SPOTIFY_SECRET }} \
+      # - NAME: pull and run image on remote
+      #   uses: appleboy/ssh-action@v1.2.1
+      #   with:
+      #     host: ${{ secrets.HOST }}
+      #     username: sins
+      #     password: ${{ secrets.PASSWORD }}
+      #     port: ${{ secrets.PORT }}
+      #     script:
+      #       cd spotify_actions
+      #
+      #       git pull origin main
+      #
+      #       docker stop flask_app_image || true
+      #       docker rm flask_app_image || true
+      #
+      #       docker build -t flask_app_image .
+      #       docker run -p 8080:8080 flask_app_image \
+      #         --e SPOTIFY_ID=${{ secrets.SPOTIFY_ID }} \
+      #         --e SPOTIFY_SECRET=${{ secrets.SPOTIFY_SECRET }} \
