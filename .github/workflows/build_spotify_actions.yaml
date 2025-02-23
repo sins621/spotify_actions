@@ -10,10 +10,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Docker Build and Publish
         uses: actions/checkout@v4
 
-      - name: executing remote ssh commands using password
+      - name: Pull and Run Image on Remote
         uses: appleboy/ssh-action@v1.2.1
         with:
           host: ${{ secrets.HOST }}
@@ -21,7 +21,7 @@ jobs:
           password: ${{ secrets.PASSWORD }}
           port: ${{ secrets.PORT }}
           script:
-            cd spotify/actions
+            cd spotify_actions
 
             git pull origin master
 
