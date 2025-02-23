@@ -40,4 +40,5 @@ jobs:
               --name spotify_container \
               -e SPOTIFY_ID=${{ secrets.SPOTIFY_ID }} \
               -e SPOTIFY_SECRET=${{ secrets.SPOTIFY_SECRET }} \
+              -e SPOTIFY_REDIRECT_URI=${{ secrets.SPOTIFY_REDIRECT_URI }} \
               sins621/test:latest
