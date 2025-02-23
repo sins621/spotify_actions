@@ -28,6 +28,6 @@ jobs:
           username: sins
           password: ${{ secrets.PASSWORD }}
           port: ${{ secrets.PORT }}
-          script:
+          script: |
             cd spotify_actions
             docker run -p 8080:8080 -e SPOTIFY_ID=${{ secrets.SPOTIFY_ID }} -e SPOTIFY_SECRET=${{ secrets.SPOTIFY_SECRET }} sins621/test:latest
