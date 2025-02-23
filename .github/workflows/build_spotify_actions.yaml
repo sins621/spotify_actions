@@ -17,12 +17,12 @@ jobs:
         uses: actions/checkout@v4
 
       - name: build image
-        run: docker build . -t sins621/test:latest
+        run: docker build . -t sins621/spotify_actions:latest
 
       - name: push image to docker hub
         run: |
           docker login -u sins621 -p ${{ secrets.DOCKER_HUB_TOKEN }}
-          docker push sins621/test:latest
+          docker push sins621/spotify_actions:latest
 
       - name: pull and run image on remote
         uses: appleboy/ssh-action@v1.2.1
@@ -35,10 +35,10 @@ jobs:
             cd spotify_actions
             docker stop spotify_container
             docker rm spotify_container
-            docker pull sins621/test:latest
+            docker pull sins621/spotify_actions:latest
             docker run -d -p 8080:8080 \
               --name spotify_container \
               -e SPOTIFY_ID=${{ secrets.SPOTIFY_ID }} \
               -e SPOTIFY_SECRET=${{ secrets.SPOTIFY_SECRET }} \
               -e SPOTIFY_REDIRECT_URI=${{ secrets.SPOTIFY_REDIRECT_URI }} \
-              sins621/test:latest
+              sins621/spotify_actions:latest
