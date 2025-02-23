@@ -3,6 +3,7 @@ import json
 import os
 from datetime import datetime, timedelta
 from urllib.parse import urlencode
+from functools import wraps
 
 import spotipy
 from dotenv import load_dotenv
@@ -26,6 +27,25 @@ STATE = os.getenv("SPOTIFY_STATE", "some-state-value")
 sp = None
 refresh_token = None
 expire_time = None
+
+
+def spotify_auth_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        global sp, expire_time
+
+        if not sp:
+            return jsonify({"error": "Please Authenticate Spotify"}), 400
+
+        if expire_time and expire_time < datetime.now():
+            refresh_spotify()
+
+        try:
+            return f(*args, **kwargs)
+        except spotipy.SpotifyException as e:
+            return jsonify({"error": f"Spotify Error: {str(e)}"}), 500
+
+    return decorated_function
 
 
 def refresh_spotify():
@@ -90,11 +110,8 @@ def authenticate_spotify(code, state):
 
 
 @spotify_bp.route("/")
+@spotify_auth_required
 def home():
-    global expire_time
-    if expire_time:
-        if expire_time < datetime.now():
-            refresh_spotify()
     return "Hello"
 
 
@@ -127,107 +144,65 @@ def auth_redirect():
 
 
 @spotify_bp.route("/now_playing")
+@spotify_auth_required
 def now_playing():
-    if not sp:
-        return jsonify({"error": "Please Authenticate Spotify"}), 400
-
-    global expire_time
-    if expire_time:
-        if expire_time < datetime.now():
-            refresh_spotify()
-
-    try:
-        current_playback = sp.current_playback()
-        if current_playback and current_playback.get("item"):
-            item = current_playback["item"]
-            context = current_playback.get("context", {})
-            return jsonify(
-                {
-                    "song_link": item["external_urls"]["spotify"],
-                    "playlist_link": (
-                        context.get("external_urls", {}).get("spotify")
-                        if context
-                        else None
-                    ),
-                    "artists": [artist_data["name"] for artist_data in item["artists"]],
-                    "song_name": item["name"],
-                }
-            )
-        else:
-            return (
-                jsonify({"message": "No song is currently playing."}),
-                204,
-            )
-
-    except spotipy.SpotifyException as e:
+    current_playback = sp.current_playback() #pyright: ignore
+    if current_playback and current_playback.get("item"):
+        item = current_playback["item"]
+        context = current_playback.get("context", {})
+        return jsonify(
+            {
+                "song_link": item["external_urls"]["spotify"],
+                "playlist_link": (
+                    context.get("external_urls", {}).get("spotify") if context else None
+                ),
+                "artists": [artist_data["name"] for artist_data in item["artists"]],
+                "song_name": item["name"],
+            }
+        )
+    else:
         return (
-            jsonify({"error": f"Error retrieving playback info: {e}"}),
-            500,
+            jsonify({"message": "No song is currently playing."}),
+            204,
         )
 
 
 @spotify_bp.route("/skip_song")
+@spotify_auth_required
 def skip_song():
-    if not sp:
-        return jsonify({"error": "Please Authenticate Spotify"}), 400
-
-    global expire_time
-    if expire_time:
-        if expire_time < datetime.now():
-            refresh_spotify()
-
-    try:
-        sp.next_track()
-        return jsonify({"message": "Skipped Song"})
-    except spotipy.SpotifyException as e:
-        print(e.code)
-        return jsonify({"error": f"Error skipping track: {e}"}), 500
+    sp.next_track() #pyright: ignore
+    return jsonify({"message": "Skipped Song"})
 
 
 @spotify_bp.route("/search")
+@spotify_auth_required
 def search():
-    if not sp:
-        return jsonify({"error": "Please Authenticate Spotify"}), 400
-
-    global expire_time
-    if expire_time:
-        if expire_time < datetime.now():
-            refresh_spotify()
 
     query = request.args.get("q")
     if not query:
         return jsonify({"error": "Search query is required."}), 400
 
-    try:
-        response = sp.search(q=query, limit=1, market="ZA")
-        print(json.dumps(response, indent=2))
-        items = response.get("tracks", {}).get("items", [])  # pyright: ignore
-        if items:
-            song_data = items[0]
-            add_to_queue(song_data["uri"])
-            return jsonify(
-                {
-                    "song_name": song_data["name"],
-                    "artists": [
-                        artist_data["name"] for artist_data in song_data["artists"]
-                    ],
-                }
-            )
-        else:
-            return jsonify({"message": "No results found."}), 404
-    except spotipy.SpotifyException as e:
-        return jsonify({"error": f"Error searching for track: {e}"}), 500
+    response = sp.search(q=query, limit=1, market="ZA") #pyright: ignore
+    print(json.dumps(response, indent=2))
+    items = response.get("tracks", {}).get("items", []) # pyright: ignore
+    if items:
+        song_data = items[0]
+        add_to_queue(song_data["uri"])
+        return jsonify(
+            {
+                "song_name": song_data["name"],
+                "artists": [
+                    artist_data["name"] for artist_data in song_data["artists"]
+                ],
+            }
+        )
+    else:
+        return jsonify({"message": "No results found."}), 404
 
 
 @spotify_bp.route("/add", methods=["POST"])
+@spotify_auth_required
 def add_to_queue_route():
-    if not sp:
-        return jsonify({"error": "Please Authenticate Spotify"}), 400
-
-    global expire_time
-    if expire_time:
-        if expire_time < datetime.now():
-            refresh_spotify()
 
     data = request.get_json()
     if not data or "uri" not in data:
