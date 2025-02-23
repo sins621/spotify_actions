@@ -34,6 +34,7 @@ jobs:
           script: |
             cd spotify_actions
             docker stop spotify_container
+            docker rm spotify_container
             docker pull sins621/test:latest
             docker run -d -p 8080:8080 \
               --name spotify_container \
