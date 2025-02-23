@@ -18,6 +18,7 @@ jobs:
 
       - name: push image to docker hub
         run: |
+          docker login -u sins621 -p ${{ secrets.DOCKER_HUB_TOKEN }}
           docker push sins621/test:latest
 
       # - NAME: pull and run image on remote
