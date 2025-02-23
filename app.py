@@ -1,11 +1,12 @@
 import base64
-import os
-from urllib.parse import urlencode
 import json
+import os
+from datetime import datetime, timedelta
+from urllib.parse import urlencode
 
 import spotipy
 from dotenv import load_dotenv
-from flask import Flask, jsonify, redirect, request, Blueprint
+from flask import Blueprint, Flask, jsonify, redirect, request
 from requests import post
 
 load_dotenv()
@@ -24,9 +25,11 @@ REDIRECT_URI = os.getenv(
 STATE = os.getenv("SPOTIFY_STATE", "some-state-value")
 sp = None
 refresh_token = None
+expire_time = None
 
 
 def refresh_spotify():
+    global refresh_token, expire_time, sp
     refresh_url = "https://accounts.spotify.com/api/token"
     headers = {
         "Authorization": "Basic "
@@ -34,7 +37,22 @@ def refresh_spotify():
         "Content-Type": "application/x-www-form-urlencoded",
     }
     data = {"grant_type": "refresh_token", "refresh_token": refresh_token}
-    response = post(refresh_url, headers=headers, data=data)
+
+    try:
+        token_response = post(refresh_url, headers=headers, data=data).json()
+    except Exception as e:
+        return None, f"Token request failed: {e}"
+
+    if "refresh_token" in token_response:
+        print(json.dumps(token_response, indent=2))
+        access_token = token_response["access_token"]
+        expires_in = int(token_response["expires_in"])
+        refresh_token = token_response["refresh_token"]
+        expire_time = datetime.now()
+        expire_time += timedelta(0, expires_in)
+        sp = spotipy.Spotify(auth=access_token)
+    else:
+        print("No refresh token in response")
 
 
 def authenticate_spotify(code, state):
@@ -60,8 +78,12 @@ def authenticate_spotify(code, state):
 
     if "access_token" in token_response:
         access_token = token_response["access_token"]
-        global refresh_token
+        expires_in = int(token_response["expires_in"])
+
+        global refresh_token, expire_time
         refresh_token = token_response["refresh_token"]
+        expire_time = datetime.now()
+        expire_time += timedelta(0, expires_in)
         return spotipy.Spotify(auth=access_token), None
     else:
         return None, f"Token retrieval failed: {token_response}"
@@ -69,6 +91,10 @@ def authenticate_spotify(code, state):
 
 @spotify_bp.route("/")
 def home():
+    global expire_time
+    if expire_time:
+        if expire_time < datetime.now():
+            refresh_spotify()
     return "Hello"
 
 
@@ -105,6 +131,11 @@ def now_playing():
     if not sp:
         return jsonify({"error": "Please Authenticate Spotify"}), 400
 
+    global expire_time
+    if expire_time:
+        if expire_time < datetime.now():
+            refresh_spotify()
+
     try:
         current_playback = sp.current_playback()
         if current_playback and current_playback.get("item"):
@@ -139,6 +170,12 @@ def now_playing():
 def skip_song():
     if not sp:
         return jsonify({"error": "Please Authenticate Spotify"}), 400
+
+    global expire_time
+    if expire_time:
+        if expire_time < datetime.now():
+            refresh_spotify()
+
     try:
         sp.next_track()
         return jsonify({"message": "Skipped Song"})
@@ -151,6 +188,11 @@ def skip_song():
 def search():
     if not sp:
         return jsonify({"error": "Please Authenticate Spotify"}), 400
+
+    global expire_time
+    if expire_time:
+        if expire_time < datetime.now():
+            refresh_spotify()
 
     query = request.args.get("q")
     if not query:
@@ -182,6 +224,11 @@ def add_to_queue_route():
     if not sp:
         return jsonify({"error": "Please Authenticate Spotify"}), 400
 
+    global expire_time
+    if expire_time:
+        if expire_time < datetime.now():
+            refresh_spotify()
+
     data = request.get_json()
     if not data or "uri" not in data:
         return jsonify({"error": "Track URI is required in the request body."}), 400
@@ -202,5 +249,6 @@ def add_to_queue(uri):
             )
     else:
         return jsonify({"error": "Please Authenticate Spotify"}), 400
+
 
 app.register_blueprint(spotify_bp)
