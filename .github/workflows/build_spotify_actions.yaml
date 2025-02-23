@@ -23,10 +23,10 @@ jobs:
           script:
             cd spotify_actions
 
-            git pull origin master
+            git pull origin main
 
-            docker stop flask_app || true
-            docker rm flask_app || true
+            docker stop flask_app_image || true
+            docker rm flask_app_image || true
 
             docker build -t flask_app_image .
             docker run -p 8080:8080 flask_app_image \
