@@ -5,10 +5,9 @@ from datetime import datetime, timedelta
 from urllib.parse import urlencode
 from functools import wraps
 
-import spotipy
 from dotenv import load_dotenv
 from flask import Blueprint, Flask, jsonify, redirect, request
-from requests import post
+from requests import post, get
 
 load_dotenv()
 
@@ -24,7 +23,10 @@ REDIRECT_URI = os.getenv(
     "SPOTIFY_REDIRECT_URI", "http://localhost:8000/api/spotify/auth_redirect"
 )
 STATE = os.getenv("SPOTIFY_STATE", "some-state-value")
+SPOTIFY_URL = "https://accounts.spotify.com/api/token"
+
 sp = None
+access_token = None
 refresh_token = None
 expire_time = None
 
@@ -32,54 +34,51 @@ expire_time = None
 def spotify_auth_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        global sp, expire_time
-
-        if not sp:
-            return jsonify({"error": "Please Authenticate Spotify"}), 400
-
         if expire_time and expire_time < datetime.now():
             refresh_spotify()
 
         try:
             return f(*args, **kwargs)
-        except spotipy.SpotifyException as e:
+        except Exception as e:
             return jsonify({"error": f"Spotify Error: {str(e)}"}), 500
 
     return decorated_function
 
 
+def set_access_token(url, headers, data):
+    global access_token, refresh_token, expire_time
+    try:
+        token_response = post(url, headers=headers, data=data).json()
+    except Exception as e:
+        return None, f"Token request failed: {e}"
+
+    if "access_token" in token_response:
+        access_token = token_response["access_token"]
+        expires_in = int(token_response["expires_in"])
+
+        if "refresh_token" in token_response:
+            refresh_token = token_response["refresh_token"]
+            expire_time = datetime.now()
+            expire_time += timedelta(0, expires_in)
+    else:
+        return None, f"Token retrieval failed: {token_response}"
+
+
 def refresh_spotify():
     global refresh_token, expire_time, sp
-    refresh_url = "https://accounts.spotify.com/api/token"
     headers = {
         "Authorization": "Basic "
         + base64.b64encode(f"{SPOTIFY_ID}:{SPOTIFY_SECRET}".encode()).decode(),
         "Content-Type": "application/x-www-form-urlencoded",
     }
     data = {"grant_type": "refresh_token", "refresh_token": refresh_token}
-
-    try:
-        token_response = post(refresh_url, headers=headers, data=data).json()
-    except Exception as e:
-        return None, f"Token request failed: {e}"
-
-    if "refresh_token" in token_response:
-        print(json.dumps(token_response, indent=2))
-        access_token = token_response["access_token"]
-        expires_in = int(token_response["expires_in"])
-        refresh_token = token_response["refresh_token"]
-        expire_time = datetime.now()
-        expire_time += timedelta(0, expires_in)
-        sp = spotipy.Spotify(auth=access_token)
-    else:
-        print("No refresh token in response")
+    set_access_token(SPOTIFY_URL, headers, data)
 
 
 def authenticate_spotify(code, state):
     if not code or state != STATE:
         return None, "Authorization failed."
 
-    token_url = "https://accounts.spotify.com/api/token"
     headers = {
         "Authorization": "Basic "
         + base64.b64encode(f"{SPOTIFY_ID}:{SPOTIFY_SECRET}".encode()).decode(),
@@ -91,28 +90,7 @@ def authenticate_spotify(code, state):
         "redirect_uri": REDIRECT_URI,
     }
 
-    try:
-        token_response = post(token_url, headers=headers, data=data).json()
-    except Exception as e:
-        return None, f"Token request failed: {e}"
-
-    if "access_token" in token_response:
-        access_token = token_response["access_token"]
-        expires_in = int(token_response["expires_in"])
-
-        global refresh_token, expire_time
-        refresh_token = token_response["refresh_token"]
-        expire_time = datetime.now()
-        expire_time += timedelta(0, expires_in)
-        return spotipy.Spotify(auth=access_token), None
-    else:
-        return None, f"Token retrieval failed: {token_response}"
-
-
-@spotify_bp.route("/")
-@spotify_auth_required
-def home():
-    return "Hello"
+    set_access_token(SPOTIFY_URL, headers, data)
 
 
 @spotify_bp.route("/authenticate")
@@ -131,22 +109,30 @@ def authenticate():
 
 @spotify_bp.route("/auth_redirect")
 def auth_redirect():
+    global access_token
     code = request.args.get("code")
     state = request.args.get("state")
+    authenticate_spotify(code, state)
 
-    global sp
-    sp, error_message = authenticate_spotify(code, state)
-
-    if sp:
+    if access_token:
         return "Spotify Authenticated Successfully"
     else:
-        return jsonify({"error": error_message}), 400
+        return jsonify({"error": "Error Authenticating"}), 400
+
+
+@spotify_bp.route("/")
+@spotify_auth_required
+def home():
+    return "Hello"
 
 
 @spotify_bp.route("/now_playing")
 @spotify_auth_required
 def now_playing():
-    current_playback = sp.current_playback() #pyright: ignore
+    ENDPOINT = "https://api.spotify.com/v1/me/player/currently-playing"
+    headers = {"Authorization": f"Bearer {access_token}"}
+    response = get(ENDPOINT, headers=headers, params={"market": "AF"})
+    current_playback = response.json()
     if current_playback and current_playback.get("item"):
         item = current_playback["item"]
         context = current_playback.get("context", {})
@@ -170,21 +156,27 @@ def now_playing():
 @spotify_bp.route("/skip_song")
 @spotify_auth_required
 def skip_song():
-    sp.next_track() #pyright: ignore
+    ENDPOINT = "https://api.spotify.com/v1/me/player/next"
+    headers = {"Authorization": f"Bearer {access_token}"}
+    post(ENDPOINT, headers=headers)
     return jsonify({"message": "Skipped Song"})
 
 
 @spotify_bp.route("/search")
 @spotify_auth_required
 def search():
-
     query = request.args.get("q")
     if not query:
         return jsonify({"error": "Search query is required."}), 400
+    q = query.replace("by", "").title()
 
-    response = sp.search(q=query, limit=1, market="ZA") #pyright: ignore
-    print(json.dumps(response, indent=2))
-    items = response.get("tracks", {}).get("items", []) # pyright: ignore
+    params = {"q": q, "limit": 1, "market": "ZA", "type": "track", "offset": 0}
+    ENDPOINT = "https://api.spotify.com/v1/search"
+    headers = {"Authorization": f"Bearer {access_token}"}
+    get_request = get(ENDPOINT, headers=headers, params=params)
+    get_request.raise_for_status()
+    response = get_request.json()
+    items = response.get("tracks", {}).get("items", [])
     if items:
         song_data = items[0]
         add_to_queue(song_data["uri"])
@@ -213,17 +205,16 @@ def add_to_queue_route():
 
 
 def add_to_queue(uri):
-    if sp:
-        try:
-            sp.add_to_queue(uri)
-            return jsonify({"message": "Successfully added to queue"})
-        except spotipy.SpotifyException as e:
-            return (
-                jsonify({"error": f"Error adding to queue: {e}"}),
-                500,
-            )
-    else:
-        return jsonify({"error": "Please Authenticate Spotify"}), 400
+    try:
+        ENDPOINT = "https://api.spotify.com/v1/me/player/queue"
+        headers = {"Authorization": f"Bearer {access_token}"}
+        post(ENDPOINT, headers=headers, params={"uri": uri})
+        return jsonify({"message": "Successfully added to queue"})
+    except Exception as e:
+        return (
+            jsonify({"error": f"Error adding to queue: {e}"}),
+            500,
+        )
 
 
 app.register_blueprint(spotify_bp)
