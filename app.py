@@ -7,7 +7,7 @@ from functools import wraps
 
 from dotenv import load_dotenv
 from flask import Blueprint, Flask, jsonify, redirect, request
-from requests import post, get
+from requests import post, get, HTTPError, JSONDecodeError
 
 load_dotenv()
 
@@ -60,8 +60,8 @@ def spotify_auth_required(f):
 
         try:
             return f(*args, **kwargs)
-        except Exception as e:
-            return jsonify({"error": f"Spotify Error: {str(e)}"}), 500
+        except HTTPError as err:
+            return jsonify("error", f"Http Error: {err}")
 
     return decorated_function
 
@@ -70,7 +70,8 @@ def set_access_token(url, headers, data):
     global access_token, refresh_token, expire_time
     try:
         token_response = post(url, headers=headers, data=data).json()
-    except Exception as e:
+        token_response.raise_for_status()
+    except HTTPError as e:
         return None, f"Token request failed: {e}"
 
     token_dict = {}
@@ -157,13 +158,17 @@ def home():
 
 
 @spotify_bp.route("/now_playing")
-@spotify_auth_required
 def now_playing():
     ENDPOINT = "https://api.spotify.com/v1/me/player/currently-playing"
     headers = {"Authorization": f"Bearer {access_token}"}
     response = get(ENDPOINT, headers=headers, params={"market": "AF"})
-    current_playback = response.json()
-    if current_playback and current_playback.get("item"):
+    print(response.text)
+    response.raise_for_status()
+    try:
+        current_playback = response.json()
+    except JSONDecodeError:
+        return jsonify({"message": "No song is currently playing."}), 204
+    else:
         item = current_playback["item"]
         context = current_playback.get("context", {})
         return jsonify(
@@ -176,11 +181,6 @@ def now_playing():
                 "song_name": item["name"],
             }
         )
-    else:
-        return (
-            jsonify({"message": "No song is currently playing."}),
-            204,
-        )
 
 
 @spotify_bp.route("/skip_song")
@@ -188,7 +188,8 @@ def now_playing():
 def skip_song():
     ENDPOINT = "https://api.spotify.com/v1/me/player/next"
     headers = {"Authorization": f"Bearer {access_token}"}
-    post(ENDPOINT, headers=headers)
+    response = post(ENDPOINT, headers=headers)
+    response.raise_for_status()
     return jsonify({"message": "Skipped Song"})
 
 
@@ -238,7 +239,9 @@ def add_to_queue(uri):
     try:
         ENDPOINT = "https://api.spotify.com/v1/me/player/queue"
         headers = {"Authorization": f"Bearer {access_token}"}
-        post(ENDPOINT, headers=headers, params={"uri": uri})
+        response = post(ENDPOINT, headers=headers, params={"uri": uri})
+        response.raise_for_status()
+
         return jsonify({"message": "Successfully added to queue"})
     except Exception as e:
         return (
