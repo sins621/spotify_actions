@@ -25,7 +25,7 @@ jobs:
           docker push sins621/spotify_actions:latest
 
       - name: pull and run image on remote
-        uses: appleboy/ssh-action@v1.2.1
+        uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
