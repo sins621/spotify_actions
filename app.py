@@ -54,12 +54,13 @@ def set_access_token(url, headers, data):
 
     if "access_token" in token_response:
         access_token = token_response["access_token"]
-        expires_in = int(token_response["expires_in"])
+        if "expires_in" in token_response:
+            expires_in = int(token_response["expires_in"])
+            expire_time = datetime.now()
+            expire_time += timedelta(0, expires_in)
 
         if "refresh_token" in token_response:
             refresh_token = token_response["refresh_token"]
-            expire_time = datetime.now()
-            expire_time += timedelta(0, expires_in)
     else:
         return None, f"Token retrieval failed: {token_response}"
 
