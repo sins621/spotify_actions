@@ -158,11 +158,11 @@ def home():
 
 
 @spotify_bp.route("/now_playing")
+@spotify_auth_required
 def now_playing():
     ENDPOINT = "https://api.spotify.com/v1/me/player/currently-playing"
     headers = {"Authorization": f"Bearer {access_token}"}
     response = get(ENDPOINT, headers=headers, params={"market": "AF"})
-    print(response.text)
     response.raise_for_status()
     try:
         current_playback = response.json()
