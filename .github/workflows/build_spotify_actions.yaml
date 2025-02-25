@@ -29,7 +29,7 @@ jobs:
         with:
           host: ${{ secrets.HOST }}
           username: sins
-          password: ${{ secrets.PASSWORD }}
+          passphrase: ${{ secrets.PUBKEY }}
           port: ${{ secrets.PORT }}
           script: |
             cd spotify_actions
