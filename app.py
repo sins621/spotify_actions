@@ -25,15 +25,36 @@ REDIRECT_URI = os.getenv(
 STATE = os.getenv("SPOTIFY_STATE", "some-state-value")
 SPOTIFY_URL = "https://accounts.spotify.com/api/token"
 
-sp = None
-access_token = None
-refresh_token = None
-expire_time = None
+
+def write_to_json(dictionary):
+    json_object = json.dumps(dictionary, indent=2)
+    with open("tokens.json", "w") as outfile:
+        outfile.write(json_object)
+
+
+def read_from_json() -> dict:
+    with open("tokens.json", "r") as openfile:
+        json_object = json.load(openfile)
+        return json_object
+
+
+try:
+    token_info = read_from_json()
+    access_token = token_info["access_token"]
+    expire_time = datetime.strptime(token_info["expire_time"], "%d-%b-%Y (%H:%M:%S.%f)")
+    refresh_token = token_info["refresh_token"]
+except FileNotFoundError as e:
+    access_token = None
+    expire_time = None
+    refresh_token = None
 
 
 def spotify_auth_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        if not access_token:
+            return jsonify({"error": "Please Authenticate Spotify"}), 400
+
         if expire_time and expire_time < datetime.now():
             refresh_spotify()
 
@@ -52,15 +73,23 @@ def set_access_token(url, headers, data):
     except Exception as e:
         return None, f"Token request failed: {e}"
 
+    token_dict = {}
     if "access_token" in token_response:
         access_token = token_response["access_token"]
         if "expires_in" in token_response:
             expires_in = int(token_response["expires_in"])
             expire_time = datetime.now()
             expire_time += timedelta(0, expires_in)
+            token_dict = {
+                "access_token": access_token,
+                "expire_time": expire_time.strftime("%d-%b-%Y (%H:%M:%S.%f)"),
+            }
 
         if "refresh_token" in token_response:
             refresh_token = token_response["refresh_token"]
+            token_dict["refresh_token"] = refresh_token
+
+        write_to_json(token_dict)
     else:
         return None, f"Token retrieval failed: {token_response}"
 
