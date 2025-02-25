@@ -70,7 +70,6 @@ def set_access_token(url, headers, data):
     global access_token, refresh_token, expire_time
     try:
         token_response = post(url, headers=headers, data=data).json()
-        token_response.raise_for_status()
     except HTTPError as e:
         return None, f"Token request failed: {e}"
 
@@ -248,6 +247,28 @@ def add_to_queue(uri):
             jsonify({"error": f"Error adding to queue: {e}"}),
             500,
         )
+
+
+@spotify_bp.route("/get_queue")
+@spotify_auth_required
+def get_queue():
+    ENDPOINT = "https://api.spotify.com/v1/me/player/queue"
+    headers = {"Authorization": f"Bearer {access_token}"}
+    response = get(ENDPOINT, headers=headers)
+    response.raise_for_status()
+    queue_data = response.json()
+    if "queue" in queue_data:
+        queue = []
+        for _, item in zip(range(5), queue_data["queue"]):
+            song = {
+                "song_link": item["external_urls"]["spotify"],
+                "artists": [artist_data["name"] for artist_data in item["artists"]],
+                "song_name": item["name"],
+            }
+            queue.append(song)
+        return jsonify(queue)
+    else:
+        return jsonify({"message": "No songs in que"}), 204
 
 
 app.register_blueprint(spotify_bp)
