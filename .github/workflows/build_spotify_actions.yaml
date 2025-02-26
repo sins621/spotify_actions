@@ -36,9 +36,8 @@ jobs:
             docker stop spotify_container
             docker rm spotify_container
             docker pull sins621/spotify_actions:latest
-            docker run -d -p 8080:8080 \
+            docker run -d -p 8080:8080 --restart \
               --name spotify_container \
-              --restart \
               -e SPOTIFY_ID=${{ secrets.SPOTIFY_ID }} \
               -e SPOTIFY_SECRET=${{ secrets.SPOTIFY_SECRET }} \
               -e SPOTIFY_REDIRECT_URI=${{ secrets.SPOTIFY_REDIRECT_URI }} \
