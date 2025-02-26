@@ -88,6 +88,8 @@ def set_access_token(url, headers, data):
         if "refresh_token" in token_response:
             refresh_token = token_response["refresh_token"]
             token_dict["refresh_token"] = refresh_token
+        else:
+            token_dict["refresh_token"] = refresh_token
 
         write_to_json(token_dict)
     else:
@@ -156,9 +158,9 @@ def home():
     return "Hello"
 
 
-@spotify_bp.route("/now_playing")
+@spotify_bp.route("/playing")
 @spotify_auth_required
-def now_playing():
+def playing():
     ENDPOINT = "https://api.spotify.com/v1/me/player/currently-playing"
     headers = {"Authorization": f"Bearer {access_token}"}
     response = get(ENDPOINT, headers=headers, params={"market": "AF"})
@@ -182,9 +184,9 @@ def now_playing():
         )
 
 
-@spotify_bp.route("/skip_song")
+@spotify_bp.route("/skip")
 @spotify_auth_required
-def skip_song():
+def skip():
     ENDPOINT = "https://api.spotify.com/v1/me/player/next"
     headers = {"Authorization": f"Bearer {access_token}"}
     response = post(ENDPOINT, headers=headers)
@@ -222,9 +224,9 @@ def search():
         return jsonify({"message": "No results found."}), 404
 
 
-@spotify_bp.route("/add", methods=["POST"])
+@spotify_bp.route("/add_link", methods=["POST"])
 @spotify_auth_required
-def add_to_queue_route():
+def add_link():
 
     data = request.get_json()
     if not data or "uri" not in data:
@@ -249,17 +251,18 @@ def add_to_queue(uri):
         )
 
 
-@spotify_bp.route("/get_queue")
+@spotify_bp.route("/queue")
 @spotify_auth_required
-def get_queue():
+def queue():
     ENDPOINT = "https://api.spotify.com/v1/me/player/queue"
     headers = {"Authorization": f"Bearer {access_token}"}
     response = get(ENDPOINT, headers=headers)
     response.raise_for_status()
     queue_data = response.json()
+    QUEUE_LIMIT = 5
     if "queue" in queue_data:
         queue = []
-        for _, item in zip(range(5), queue_data["queue"]):
+        for _, item in zip(range(QUEUE_LIMIT), queue_data["queue"]):
             song = {
                 "song_link": item["external_urls"]["spotify"],
                 "artists": [artist_data["name"] for artist_data in item["artists"]],
