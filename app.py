@@ -74,26 +74,25 @@ def set_access_token(url, headers, data):
         return None, f"Token request failed: {e}"
 
     token_dict = {}
-    if "access_token" in token_response:
-        access_token = token_response["access_token"]
-        if "expires_in" in token_response:
-            expires_in = int(token_response["expires_in"])
-            expire_time = datetime.now()
-            expire_time += timedelta(0, expires_in)
-            token_dict = {
-                "access_token": access_token,
-                "expire_time": expire_time.strftime("%d-%b-%Y (%H:%M:%S.%f)"),
-            }
-
-        if "refresh_token" in token_response:
-            refresh_token = token_response["refresh_token"]
-            token_dict["refresh_token"] = refresh_token
-        else:
-            token_dict["refresh_token"] = refresh_token
-
-        write_to_json(token_dict)
-    else:
+    if not "access_token" in token_response:
         return None, f"Token retrieval failed: {token_response}"
+
+    access_token = token_response["access_token"]
+    if "expires_in" in token_response:
+        expires_in = int(token_response["expires_in"])
+        expire_time = datetime.now()
+        expire_time += timedelta(0, expires_in)
+        token_dict = {
+            "access_token": access_token,
+            "expire_time": expire_time.strftime("%d-%b-%Y (%H:%M:%S.%f)"),
+        }
+
+    if "refresh_token" in token_response:
+        refresh_token = token_response["refresh_token"]
+
+    token_dict["refresh_token"] = refresh_token
+
+    write_to_json(token_dict)
 
 
 def refresh_spotify():
@@ -146,10 +145,10 @@ def auth_redirect():
     state = request.args.get("state")
     authenticate_spotify(code, state)
 
-    if access_token:
-        return "Spotify Authenticated Successfully"
-    else:
+    if not access_token:
         return jsonify({"error": "Error Authenticating"}), 400
+
+    return "Spotify Authenticated Successfully"
 
 
 @spotify_bp.route("/")
@@ -198,8 +197,10 @@ def skip():
 @spotify_auth_required
 def search():
     query = request.args.get("q")
+
     if not query:
         return jsonify({"error": "Search query is required."}), 400
+
     q = query.replace("by", "").title()
 
     params = {"q": q, "limit": 1, "market": "ZA", "type": "track", "offset": 0}
@@ -209,19 +210,18 @@ def search():
     get_request.raise_for_status()
     response = get_request.json()
     items = response.get("tracks", {}).get("items", [])
-    if items:
-        song_data = items[0]
-        add_to_queue(song_data["uri"])
-        return jsonify(
-            {
-                "song_name": song_data["name"],
-                "artists": [
-                    artist_data["name"] for artist_data in song_data["artists"]
-                ],
-            }
-        )
-    else:
+
+    if not items:
         return jsonify({"message": "No results found."}), 404
+
+    song_data = items[0]
+    add_to_queue(song_data["uri"])
+    return jsonify(
+        {
+            "song_name": song_data["name"],
+            "artists": [artist_data["name"] for artist_data in song_data["artists"]],
+        }
+    )
 
 
 @spotify_bp.route("/add_link", methods=["POST"])
@@ -260,18 +260,19 @@ def queue():
     response.raise_for_status()
     queue_data = response.json()
     QUEUE_LIMIT = 5
-    if "queue" in queue_data:
-        queue = []
-        for _, item in zip(range(QUEUE_LIMIT), queue_data["queue"]):
-            song = {
-                "song_link": item["external_urls"]["spotify"],
-                "artists": [artist_data["name"] for artist_data in item["artists"]],
-                "song_name": item["name"],
-            }
-            queue.append(song)
-        return jsonify(queue)
-    else:
+
+    if not "queue" in queue_data:
         return jsonify({"message": "No songs in que"}), 204
+
+    queue = []
+    for _, item in zip(range(QUEUE_LIMIT), queue_data["queue"]):
+        song = {
+            "song_link": item["external_urls"]["spotify"],
+            "artists": [artist_data["name"] for artist_data in item["artists"]],
+            "song_name": item["name"],
+        }
+        queue.append(song)
+    return jsonify(queue)
 
 
 app.register_blueprint(spotify_bp)
