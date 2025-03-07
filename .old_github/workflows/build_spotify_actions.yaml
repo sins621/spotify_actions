@@ -36,7 +36,7 @@ jobs:
             docker stop spotify_container
             docker rm spotify_container
             docker pull sins621/spotify_actions:latest
-            docker run -d -p 8080:8080 \
+            docker run -d -p 8080:8080 --restart unless-stopped \
               --name spotify_container \
               --network my_network \
               -e SPOTIFY_ID=${{ secrets.SPOTIFY_ID }} \
